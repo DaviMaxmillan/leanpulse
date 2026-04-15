@@ -24,7 +24,7 @@ export default function SalaEntradaPage() {
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const API = () => `http://${window.location.hostname}:3001`;
+  const API = () => `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
 
   useEffect(() => {
     if (!roomName) { setError('Sala não encontrada.'); setLoading(false); return; }

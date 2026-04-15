@@ -14,7 +14,7 @@ export default function TeacherLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`http://${window.location.hostname}:3001/auth/teacher`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/auth/teacher`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -207,3 +207,4 @@ export default function TeacherLogin() {
     </div>
   );
 }
+

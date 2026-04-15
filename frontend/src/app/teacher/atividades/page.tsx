@@ -40,7 +40,7 @@ export default function AtividadesPage() {
   const [aiCount, setAiCount] = useState(3);
   const [generatingAi, setGeneratingAi] = useState(false);
 
-  const API = () => `http://${window.location.hostname}:3001`;
+  const API = () => `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
 
   useEffect(() => {
     const t = localStorage.getItem('teacher_token');
@@ -413,3 +413,4 @@ export default function AtividadesPage() {
     </div>
   );
 }
+

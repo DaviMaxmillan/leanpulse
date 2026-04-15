@@ -34,7 +34,7 @@ export default function TurmasPage() {
   const fetchClasses = async (t: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://${window.location.hostname}:3001/classes`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/classes`, {
         headers: { Authorization: `Bearer ${t}` },
       });
       if (res.ok) setClasses(await res.json());
@@ -47,7 +47,7 @@ export default function TurmasPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`http://${window.location.hostname}:3001/classes`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/classes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
@@ -66,7 +66,7 @@ export default function TurmasPage() {
   };
 
   const handleClone = async (id: string) => {
-    const res = await fetch(`http://${window.location.hostname}:3001/classes/${id}/clone`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/classes/${id}/clone`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -78,7 +78,7 @@ export default function TurmasPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Excluir a turma "${name}"?\n\nTodos os alunos matriculados serão removidos.`)) return;
-    const res = await fetch(`http://${window.location.hostname}:3001/classes/${id}`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/classes/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -335,3 +335,4 @@ export default function TurmasPage() {
     </div>
   );
 }
+

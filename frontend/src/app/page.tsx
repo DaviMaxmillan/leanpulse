@@ -17,7 +17,7 @@ export default function StudentAccess() {
 
     try {
       const formattedRoomName = roomName.replace(/\s+/g, '-').toUpperCase();
-      const API_URL = `http://${window.location.hostname}:3001`;
+      const API_URL = `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
 
       const roomRes = await fetch(`${API_URL}/rooms/by-name/${formattedRoomName}`);
       if (!roomRes.ok) {
@@ -204,3 +204,4 @@ export default function StudentAccess() {
     </div>
   );
 }
+

@@ -63,7 +63,7 @@ function ExamContent() {
     const storageKey = `exam_progress_${sessionId}`;
     const savedProgress = localStorage.getItem(storageKey);
 
-    const API_URL = `http://${window.location.hostname}:3001`;
+    const API_URL = `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
 
     fetch(`${API_URL}/rooms/by-name/${roomName}`)
       .then(res => res.json())
@@ -113,7 +113,7 @@ function ExamContent() {
       setSelectedAnswers(initAnswers);
     }
 
-    const newSocket = io(`http://${window.location.hostname}:3001`);
+    const newSocket = io(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`);
     setSocket(newSocket);
     newSocket.on('status_update', (s) => { setStatus(s); });
     return () => { newSocket.disconnect(); };
@@ -221,7 +221,7 @@ function ExamContent() {
         selectedOptionIds: optIds,
       }));
 
-      const res = await fetch(`http://${window.location.hostname}:3001/sessions/${sessionId}/submit`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/sessions/${sessionId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: answersBody }),
