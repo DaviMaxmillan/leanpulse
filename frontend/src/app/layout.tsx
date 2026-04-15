@@ -9,8 +9,8 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "LeanPulse — Avaliações Acadêmicas",
-  description: "Plataforma institucional de avaliações seguras com monitoramento em tempo real.",
+  title: "LeanPulse — Ambiente Acadêmico - Seguro e Anti-Fraude",
+  description: "Plataforma Acadêmica de Avaliações, Atividades, Monitoramento e Muito Mais em Tempo Real.",
 };
 
 export default function RootLayout({
