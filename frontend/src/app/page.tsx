@@ -58,6 +58,20 @@ export default function StudentAccess() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen w-full bg-[var(--surface-low)] relative overflow-hidden font-montserrat">
+      {/* Button to go to Teacher login */}
+      <button
+        onClick={() => router.push('/teacher/login')}
+        className="absolute top-6 right-6 md:left-6 md:right-auto z-50 flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 border border-white/20 text-white font-bold hover:bg-white/20 hover:border-white/30 transition-all backdrop-blur-md shadow-lg"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Painel do Professor
+      </button>
+
       {/* Left Side: Branding & Value Props */}
       <div className="hidden md:flex flex-col justify-center p-6 lg:p-12 relative overflow-hidden z-20 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] shadow-2xl">
         {/* Animated Pulse Line */}
