@@ -43,7 +43,7 @@ export default function TeacherLogin() {
     <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen w-full bg-[var(--surface-low)] relative overflow-hidden font-montserrat">
       <button 
         onClick={() => router.push('/')}
-        className="absolute top-6 right-6 md:left-6 md:right-auto z-50 flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] md:bg-white/10 md:border md:border-white/20 md:hover:bg-white/20 md:hover:border-white/30 transition-all backdrop-blur-md shadow-lg text-sm md:text-base font-bold"
+        className="absolute top-6 right-6 md:top-auto md:bottom-8 md:left-8 md:right-auto z-50 flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] md:bg-white/10 md:border md:border-white/20 md:hover:bg-white/20 md:hover:border-white/30 transition-all backdrop-blur-md shadow-lg text-sm md:text-base font-bold"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
