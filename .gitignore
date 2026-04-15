@@ -1,0 +1,13 @@
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Banco SQLite local (não precisamos mais disso na nuvem)
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+# Scripts locais de conveniência
+*.bat
+
+# Docs temporários gerados pela IA
+docs/
