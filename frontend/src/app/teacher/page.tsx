@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl } from '../../lib/api';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -76,14 +77,14 @@ export default function TeacherDashboard() {
 
   const fetchExams = async (t = token) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/exams`, { headers: { Authorization: `Bearer ${t}` } });
+      const res = await fetch(`${getApiUrl()}/exams`, { headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) setExams(await res.json());
     } catch (e) {}
   };
 
   const fetchRooms = async (t = token) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms`, { headers: { Authorization: `Bearer ${t}` } });
+      const res = await fetch(`${getApiUrl()}/rooms`, { headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) setRooms(await res.json());
     } catch (e) {}
   };
@@ -178,8 +179,8 @@ export default function TeacherDashboard() {
 
     try {
       const url = editingExamId 
-        ? `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/exams/${editingExamId}` 
-        : `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/exams`;
+        ? `${getApiUrl()}/exams/${editingExamId}` 
+        : `${getApiUrl()}/exams`;
       const method = editingExamId ? 'PATCH' : 'POST';
 
       const res = await fetch(url, {
@@ -197,7 +198,7 @@ export default function TeacherDashboard() {
 
   const handleDeleteExam = async (id: string) => {
     if (!confirm('Deseja deletar permanentemente esta prova?')) return;
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/exams/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${getApiUrl()}/exams/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     fetchExams();
   };
 
@@ -205,7 +206,7 @@ export default function TeacherDashboard() {
   const handleCreateRoom = async (e: any) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms`, {
+      const res = await fetch(`${getApiUrl()}/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: newRoomName.toUpperCase(), examId: selectedExamId }),
@@ -224,7 +225,7 @@ export default function TeacherDashboard() {
 
   const handleDeleteRoom = async (id: string) => {
     if (!confirm('Deseja deletar permanentemente esta sala e todos os seus registros?')) return;
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${getApiUrl()}/rooms/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     fetchRooms();
   };
 
@@ -235,7 +236,7 @@ export default function TeacherDashboard() {
     if (!confirm('Isso apagará todas as tentativas anteriores desta sala para começar do zero. Continuar?')) return;
     
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms/${roomId}/reactivate`, {
+      const res = await fetch(`${getApiUrl()}/rooms/${roomId}/reactivate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ examId: finalExamId }),
@@ -253,10 +254,10 @@ export default function TeacherDashboard() {
     if (socket) socket.disconnect();
     setMonitoringRoom(room);
     setActiveTab('monitoring');
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/sessions/room/${room.id}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${getApiUrl()}/sessions/room/${room.id}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(data => setSessions(data));
 
-    const newSocket = io(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`);
+    const newSocket = io(`${getApiUrl()}`);
     setSocket(newSocket);
     newSocket.on('connect', () => { newSocket.emit('join_exam_room', { roomId: room.id }); });
     newSocket.on('violation_alert', (data) => {
@@ -272,20 +273,20 @@ export default function TeacherDashboard() {
   };
 
   const handleUnblock = async (sessionId: string) => {
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/sessions/${sessionId}/unblock`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${getApiUrl()}/sessions/${sessionId}/unblock`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'active' } : s));
   };
 
   const handleFinishRoom = async (roomId: string) => {
     if (!confirm('Encerrar esta sala?')) return;
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms/${roomId}/finish`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${getApiUrl()}/rooms/${roomId}/finish`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     fetchRooms();
     if (monitoringRoom?.id === roomId) setMonitoringRoom(null);
   };
 
   const handleDownloadReport = async (sessionId: string, studentName: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/sessions/${sessionId}/report`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/report`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Erro');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -301,7 +302,7 @@ export default function TeacherDashboard() {
 
   const handleDownloadRoomReport = async (roomId: string, roomName: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/rooms/${roomId}/report`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${getApiUrl()}/rooms/${roomId}/report`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -316,7 +317,7 @@ export default function TeacherDashboard() {
   const handleSendEmail = async (sessionId: string) => {
     setIsSendingEmail(sessionId);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/sessions/${sessionId}/send-report`, {
+      const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/send-report`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -345,7 +346,7 @@ export default function TeacherDashboard() {
         formData.append('customPrompt', customAiPrompt);
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/ai/parse-pdf`, {
+      const res = await fetch(`${getApiUrl()}/ai/parse-pdf`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

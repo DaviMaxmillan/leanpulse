@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl as API } from '../../../../lib/api';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -84,7 +85,7 @@ export default function TurmaDetailPage() {
   const [openRecord, setOpenRecord] = useState<string | null>(null);
   const [savingAtt, setSavingAtt] = useState(false);
 
-  const API = () => `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
+  
 
   useEffect(() => {
     const t = localStorage.getItem('teacher_token');

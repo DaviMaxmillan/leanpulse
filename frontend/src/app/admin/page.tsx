@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl } from '../../lib/api';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -35,7 +36,7 @@ export default function AdminDashboard() {
     const token = getToken();
     if (!token) { router.push('/teacher/login'); return; }
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/users/teachers`, {
+      const res = await fetch(`${getApiUrl()}/users/teachers`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -74,7 +75,7 @@ export default function AdminDashboard() {
 
     try {
       if (modalMode === 'create') {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/users/teachers`, {
+        const res = await fetch(`${getApiUrl()}/users/teachers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ email: formEmail, password: formPassword, name: formName }),
@@ -85,7 +86,7 @@ export default function AdminDashboard() {
         const body: any = { name: formName, email: formEmail };
         if (formPassword) body.password = formPassword;
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/users/teachers/${editingId}`, {
+        const res = await fetch(`${getApiUrl()}/users/teachers/${editingId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
@@ -105,7 +106,7 @@ export default function AdminDashboard() {
   const handleDelete = async (id: string) => {
     const token = getToken();
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}/users/teachers/${id}`, {
+      const res = await fetch(`${getApiUrl()}/users/teachers/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

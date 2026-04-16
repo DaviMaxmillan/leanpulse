@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl as API } from '../../../../lib/api';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
@@ -58,7 +59,7 @@ export default function PlanoDetailPage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [assigning, setAssigning] = useState(false);
 
-  const API = () => `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
+  
 
   useEffect(() => {
     const t = localStorage.getItem('teacher_token');

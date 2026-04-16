@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl as API } from '../../../lib/api';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ export default function SalaTurmaPage() {
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  const API = () => `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
+  
 
   useEffect(() => {
     const t = localStorage.getItem('teacher_token');

@@ -1,4 +1,5 @@
 'use client';
+import { getApiUrl } from '../lib/api';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +18,7 @@ export default function StudentAccess() {
 
     try {
       const formattedRoomName = roomName.replace(/\s+/g, '-').toUpperCase();
-      const API_URL = `${process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:3001`}`;
+      const API_URL = `${getApiUrl()}`;
 
       const roomRes = await fetch(`${API_URL}/rooms/by-name/${formattedRoomName}`);
       if (!roomRes.ok) {
