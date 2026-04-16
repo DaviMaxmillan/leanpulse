@@ -49,7 +49,7 @@ export default function SalaEntradaPage() {
       const res = await fetch(`${API()}/sessions/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentName: student.name, studentEmail: student.email, roomName }),
+        body: JSON.stringify({ roomId: room.id, studentId: selectedStudentId }),
       });
       if (!res.ok) {
         const err = await res.json();
