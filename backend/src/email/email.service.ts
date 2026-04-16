@@ -1,48 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
-import * as fs from 'fs';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(EmailService.name);
+  private resend: Resend;
+  private readonly from: string;
 
   constructor() {
-    this.initializeTransporter();
-  }
+    const apiKey = process.env.RESEND_API_KEY;
+    this.resend = new Resend(apiKey);
+    this.from = process.env.RESEND_FROM || 'LeanPulse <no-reply@leanpulse.com.br>';
 
-  private initializeTransporter() {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (smtpUser && smtpPass) {
-      // Real SMTP (Gmail)
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.SMTP_PORT || '465'),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: { user: smtpUser, pass: smtpPass },
-      });
-      this.logger.log(`Email Transporter configurado: Gmail (${smtpUser})`);
+    if (apiKey) {
+      this.logger.log(`Email configurado via Resend (${this.from})`);
     } else {
-      // Fallback: Ethereal test account
-      nodemailer.createTestAccount().then((account) => {
-        this.transporter = nodemailer.createTransport({
-          host: account.smtp.host,
-          port: account.smtp.port,
-          secure: account.smtp.secure,
-          auth: { user: account.user, pass: account.pass },
-        });
-        this.logger.log(`[DEV] Email Transporter (Ethereal): ${account.user}`);
-      });
+      this.logger.warn('RESEND_API_KEY não configurado — emails não serão enviados!');
     }
   }
 
-  private get from() {
-    return process.env.SMTP_FROM || '"LeanPulse" <no-reply@leanpulse.com>';
-  }
-
-  /** Send individual report with Excel attachment */
+  /** Send individual exam report with Excel attachment */
   async sendExamReport(
     to: string,
     studentName: string,
@@ -57,7 +34,7 @@ export class EmailService {
 
     const html = `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 620px; margin: auto; background: #0f172a; color: #e2e8f0; border-radius: 12px; overflow: hidden;">
-        <div style="background: linear-gradient(90deg, #6366f1, #8b5cf6); padding: 32px; text-align: center;">
+        <div style="background: linear-gradient(90deg, #0FA4AF, #0B1E3F); padding: 32px; text-align: center;">
           <h1 style="margin: 0; color: white; font-size: 28px; letter-spacing: 1px;">LeanPulse</h1>
           <p style="margin: 8px 0 0; color: rgba(255,255,255,0.8); font-size: 14px;">Resultado da Avaliação</p>
         </div>
@@ -68,30 +45,40 @@ export class EmailService {
             <p style="margin: 0 0 8px; color: #94a3b8; font-size: 13px;">PONTOS OBTIDOS</p>
             <p style="margin: 0 0 16px; font-size: 22px; font-weight: bold;">${rawScore.toFixed(1)}</p>
             <p style="margin: 0 0 8px; color: #94a3b8; font-size: 13px;">NOTA FINAL (peso ${weight} × ${multiplier})</p>
-            <p style="margin: 0; font-size: 36px; font-weight: 900; color: #818cf8;">${finalGrade.toFixed(2)}</p>
+            <p style="margin: 0; font-size: 36px; font-weight: 900; color: #0FA4AF;">${finalGrade.toFixed(2)}</p>
           </div>
           <p style="color: #64748b; font-size: 13px;">O gabarito detalhado com cada questão, resposta correta e sua resposta está no arquivo Excel em anexo.</p>
         </div>
         <div style="background: #1e293b; padding: 16px 32px; text-align: center;">
-          <p style="margin: 0; color: #4b5563; font-size: 12px;">Este e-mail foi gerado automaticamente pelo sistema LeanPulse.</p>
+          <p style="margin: 0; color: #4b5563; font-size: 12px;">Este e-mail foi gerado automaticamente pelo sistema LeanPulse • <a href="https://www.leanpulse.com.br" style="color: #0FA4AF;">www.leanpulse.com.br</a></p>
         </div>
       </div>
     `;
 
-    const info = await this.transporter.sendMail({
-      from: this.from,
-      to,
-      subject: `Seu resultado — ${examTitle}`,
-      html,
-      attachments: [
-        { filename: fileName, content: excelBuffer, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-      ],
-    });
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: this.from,
+        to,
+        subject: `Seu resultado — ${examTitle}`,
+        html,
+        attachments: [
+          {
+            filename: fileName,
+            content: excelBuffer,
+          },
+        ],
+      });
 
-    this.logger.log(`Email enviado para ${to}: ${info.messageId}`);
-    // Log Ethereal preview URL if using test account
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) this.logger.log(`Preview: ${previewUrl}`);
-    return info;
+      if (error) {
+        this.logger.error(`Falha ao enviar email para ${to}:`, error);
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Email enviado para ${to}: ${data?.id}`);
+      return data;
+    } catch (err) {
+      this.logger.error('Erro no envio de email:', err);
+      throw err;
+    }
   }
 }
