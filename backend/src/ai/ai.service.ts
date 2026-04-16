@@ -12,12 +12,13 @@ export class AiService {
     if (!apiKey) throw new BadRequestException('Nenhuma chave de API do Gemini configurada ou fornecida.');
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // Try combinations of model + API version
+    // Try models in order of preference — always try all before giving up
     const attempts = [
-      { model: 'gemini-2.5-flash',       apiVersion: 'v1beta' },
-      { model: 'gemini-2.0-flash',       apiVersion: 'v1beta' },
-      { model: 'gemini-2.0-flash-lite',  apiVersion: 'v1beta' },
-      { model: 'gemini-2.5-pro',         apiVersion: 'v1beta' },
+      { model: 'gemini-2.0-flash',           apiVersion: 'v1beta' },
+      { model: 'gemini-2.0-flash-lite',      apiVersion: 'v1beta' },
+      { model: 'gemini-1.5-flash',           apiVersion: 'v1beta' },
+      { model: 'gemini-1.5-pro',             apiVersion: 'v1beta' },
+      { model: 'gemini-2.5-pro-preview-03-25', apiVersion: 'v1beta' },
     ];
 
     const errors: string[] = [];
@@ -42,11 +43,9 @@ export class AiService {
         const msg = err?.message || String(err);
         this.logger.warn(`${attempt.model}/${attempt.apiVersion} failed: ${msg.substring(0, 150)}`);
         errors.push(`[${attempt.model}/${attempt.apiVersion}]: ${msg.substring(0, 120)}`);
-        // Only retry on model-availability errors
-        const isRetryable = msg.includes('not found') || msg.includes('404') ||
-                            msg.includes('429') || msg.includes('quota') ||
-                            msg.includes('UNAVAILABLE') || msg.includes('503');
-        if (!isRetryable) break; // Non-retryable error — stop immediately
+        // Always try next model — only stop on auth errors
+        const isAuthError = msg.includes('API_KEY_INVALID') || msg.includes('API key not valid') || msg.includes('401');
+        if (isAuthError) break;
       }
     }
 
