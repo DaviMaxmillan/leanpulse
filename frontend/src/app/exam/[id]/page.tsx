@@ -68,9 +68,18 @@ function ExamContent() {
 
     fetch(`${API_URL}/rooms/by-name/${roomName}`)
       .then(res => res.json())
-      .then(data => {
+      .then(async (data) => {
         const rawExam: Exam = data.exam;
-        
+
+        // Verify the session still exists in the DB (teacher may have reactivated/deleted the room)
+        const sessionCheck = await fetch(`${API_URL}/sessions/${sessionId}/exists`).catch(() => null);
+        if (!sessionCheck || !sessionCheck.ok) {
+          // Session no longer valid — clean localStorage and go back to room entry
+          localStorage.removeItem(`exam_progress_${sessionId}`);
+          router.replace(`/sala/${roomName}`);
+          return;
+        }
+
         // Handle Progress Restoration or New Start
         if (savedProgress) {
           try {

@@ -12,6 +12,16 @@ export class SessionsController {
     return this.sessionsService.startSession(body.roomId, body.studentId);
   }
 
+  @Get(':id/exists')
+  async checkSessionExists(@Param('id') id: string, @Res({ passthrough: true }) res: any) {
+    const exists = await this.sessionsService.sessionExists(id);
+    if (!exists) {
+      res.status(404);
+      return { exists: false };
+    }
+    return { exists: true };
+  }
+
   @Post(':id/block')
   blockSession(@Param('id') id: string) {
     return this.sessionsService.blockSession(id);

@@ -75,6 +75,15 @@ export class SessionsService {
     });
   }
 
+  async sessionExists(sessionId: string): Promise<boolean> {
+    const session = await this.prisma.examSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true, status: true },
+    });
+    // Session must exist and not be finished to be valid for the exam page
+    return !!session && session.status !== 'finished';
+  }
+
   async recordViolation(sessionId: string, type: string, screenshot?: string) {
     await this.prisma.examSession.update({
       where: { id: sessionId },
