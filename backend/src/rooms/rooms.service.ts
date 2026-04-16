@@ -59,6 +59,7 @@ export class RoomsService {
       orderBy: { createdAt: 'desc' },
       include: {
         exam: { select: { title: true, weight: true } },
+        class: { select: { name: true } },
         _count: { select: { sessions: true } },
       },
     });
