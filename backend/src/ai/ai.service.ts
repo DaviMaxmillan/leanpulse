@@ -1,5 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-import * as pdfParse from 'pdf-parse';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
+
 
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
