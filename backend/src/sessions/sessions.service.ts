@@ -11,21 +11,32 @@ export class SessionsService {
     private readonly emailService: EmailService,
   ) {}
 
-  async startSession(roomId: string, studentId: string) {
-    const activeSession = await this.prisma.examSession.findFirst({
-      where: { roomId, studentId, status: { not: 'finished' } },
+  async startSession(roomId: string, classStudentId: string) {
+    // 1. Busca o ClassStudent para obter nome e email
+    const classStudent = await this.prisma.classStudent.findUnique({
+      where: { id: classStudentId },
     });
+    if (!classStudent) throw new BadRequestException('Aluno não encontrado na turma.');
 
-    if (activeSession) {
-      return activeSession;
+    // 2. Encontra ou cria o Student no sistema de provas
+    let student = await this.prisma.student.findUnique({
+      where: { email: classStudent.email },
+    });
+    if (!student) {
+      student = await this.prisma.student.create({
+        data: { name: classStudent.name, email: classStudent.email },
+      });
     }
 
+    // 3. Verifica se já existe sessão ativa para este aluno nesta sala
+    const activeSession = await this.prisma.examSession.findFirst({
+      where: { roomId, studentId: student.id, status: { not: 'finished' } },
+    });
+    if (activeSession) return activeSession;
+
+    // 4. Cria a sessão
     return this.prisma.examSession.create({
-      data: {
-        roomId,
-        studentId,
-        status: 'active',
-      },
+      data: { roomId, studentId: student.id, status: 'active' },
       include: {
         room: {
           include: { exam: { include: { questions: { include: { options: true } } } } },
