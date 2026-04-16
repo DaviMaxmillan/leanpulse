@@ -1,70 +1,19 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import * as pdfParse from 'pdf-parse';
 
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',   // free tier, ultra-low cost
-  'gemini-1.5-pro',
+  'gemini-1.5-flash-8b',
   'gemini-2.0-flash-lite',
+  'gemini-1.5-pro',
 ];
 
-
-@Injectable()
-export class AiService {
-  private readonly logger = new Logger(AiService.name);
-
-  // ─── Direct REST call (no SDK — avoids version issues) ───────────────────────
-  private async callGeminiRest(
-    apiKey: string,
-    model: string,
-    parts: any[],
-    generationConfig?: any,
-  ): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const body = {
-      contents: [{ parts }],
-      generationConfig: generationConfig || { maxOutputTokens: 8192, temperature: 0.1 },
-    };
-
-    this.logger.log(`POST ${url.replace(apiKey, '***')}`);
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      const detail = errBody.substring(0, 300);
-      this.logger.warn(`${model} HTTP ${res.status}: ${detail}`);
-      throw new Error(`HTTP ${res.status} — ${detail}`);
-    }
-
-    const data = await res.json();
-    const text: string =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') ||
-      '';
-
-    if (!text) throw new Error('Resposta vazia do modelo.');
-    return text;
-  }
-
-  // ─── PDF → Questions ──────────────────────────────────────────────────────────
-  async parsePdfToQuestions(pdfBuffer: Buffer, userApiKey?: string, customPrompt?: string): Promise<any[]> {
-    const apiKey = (userApiKey?.trim()) || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new BadRequestException('Nenhuma chave de API do Gemini configurada ou fornecida.');
-
-    const basePrompt = `Você é um robô extrator de dados de provas. Sua ÚNICA tarefa é extrair ABSOLUTAMENTE TODAS as questões de múltipla escolha do documento.
-
-O PDF pode conter muitas questões. VOCÊ ESTÁ PROIBIDO DE PARAR ANTES DO FIM DO ARQUIVO.
-NÃO GERE JSON! GERE TEXTO PURAMENTE ESTRUTURADO COM O DELIMITADOR "@@@".
-
-Formatação EXIGIDA para CADA questão:
+const QUESTION_FORMAT = `
+Formatação OBRIGATÓRIA para CADA questão:
 @@@
 [ENUNCIADO]
-Texto do enunciado transcrito EXACTAMENTE como no original, sem cortes.
+Texto completo da pergunta, sem cortes.
 [PONTOS]
 1
 [MODO]
@@ -76,69 +25,143 @@ ANY_CORRECT
 @@@
 
 Regras:
-- Separe CADA questão usando "@@@" no início.
-- [ENUNCIADO]: Coloque a pergunta completa.
-- [PONTOS]: Geralmente 1.
-- [MODO]: "ANY_CORRECT" (apenas 1 certa) ou "ALL_REQUIRED" (múltiplas certas).
-- [OPCOES]: Prefixe com "(V) " para a correta e "(F) " para as incorretas.
-- Se não identificar o gabarito no PDF, marque a letra A como (V) e coloque "(verificar)" no texto.
-- Extraia TODAS as questões até o fim da última página.`;
+- Separe CADA questão com "@@@" no início.
+- [ENUNCIADO]: transcreva a pergunta completa.
+- [PONTOS]: geralmente 1.
+- [MODO]: "ANY_CORRECT" (1 certa) ou "ALL_REQUIRED" (múltiplas certas).
+- [OPCOES]: prefixe certa com "(V) " e erradas com "(F) ".
+- Se não identificar o gabarito, marque a alternativa A como (V).
+- Extraia TODAS as questões até o fim.`;
+
+@Injectable()
+export class AiService {
+  private readonly logger = new Logger(AiService.name);
+
+  // ─── REST direct call to Gemini ───────────────────────────────────────────────
+  private async callGeminiRest(
+    apiKey: string,
+    model: string,
+    textPrompt: string,
+  ): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{ parts: [{ text: textPrompt }] }],
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      this.logger.warn(`${model} HTTP ${res.status}: ${errBody.substring(0, 300)}`);
+      throw new Error(`HTTP ${res.status} - ${errBody.substring(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const text: string =
+      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
+
+    if (!text) throw new Error('Resposta vazia do modelo.');
+    return text;
+  }
+
+  // ─── Try all models in order ─────────────────────────────────────────────────
+  private async tryModels(apiKey: string, prompt: string): Promise<string> {
+    const errors: string[] = [];
+
+    for (const model of GEMINI_MODELS) {
+      try {
+        this.logger.log(`Trying ${model}...`);
+        const text = await this.callGeminiRest(apiKey, model, prompt);
+        this.logger.log(`Success with ${model} (${text.length} chars)`);
+        return text;
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        errors.push(`[${model}]: ${msg.substring(0, 150)}`);
+        this.logger.warn(`${model} failed: ${msg.substring(0, 100)}`);
+
+        // Stop on auth errors; continue on quota/not-found
+        const isAuthError = msg.includes('HTTP 401') || msg.includes('HTTP 403') ||
+          msg.includes('API_KEY_INVALID') || msg.includes('API key not valid');
+        if (isAuthError) break;
+      }
+    }
+
+    const allQuota = errors.length > 0 && errors.every(e => e.includes('429'));
+    if (allQuota) {
+      throw new BadRequestException(
+        'Cota da API Gemini esgotada (erro 429).\n\n' +
+        '➡ Soluções:\n' +
+        '1. Ative o faturamento gratuito no projeto em: https://console.cloud.google.com/billing\n' +
+        '2. Ou crie uma chave em um projeto DIFERENTE do Google Cloud (não no mesmo projeto).\n' +
+        '   O limite é por projeto, não por chave.',
+      );
+    }
+
+    throw new BadRequestException(
+      `Não foi possível processar o PDF. Erros:\n${errors.join('\n') || 'Erro desconhecido'}`,
+    );
+  }
+
+  // ─── PDF → Questions ──────────────────────────────────────────────────────────
+  async parsePdfToQuestions(pdfBuffer: Buffer, userApiKey?: string, customPrompt?: string): Promise<any[]> {
+    const apiKey = userApiKey?.trim() || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new BadRequestException('Nenhuma chave da API Gemini configurada. Configure GEMINI_API_KEY no servidor.');
+
+    // Extract text from PDF (sends TEXT tokens, not binary — ~95% fewer tokens)
+    let pdfText = '';
+    try {
+      const parsed = await pdfParse(pdfBuffer);
+      pdfText = parsed.text?.trim() || '';
+      this.logger.log(`PDF text extracted: ${pdfText.length} chars, ${parsed.numpages} pages`);
+    } catch (err: any) {
+      this.logger.warn(`PDF text extraction failed: ${err?.message} — will attempt inline`);
+    }
+
+    if (!pdfText || pdfText.length < 50) {
+      throw new BadRequestException(
+        'Não foi possível extrair texto do PDF. Certifique-se de que o PDF contém texto legível (não é uma imagem escaneada).',
+      );
+    }
+
+    // Truncate if too long (keep within ~100K chars = ~25K tokens to be safe)
+    const maxChars = 90_000;
+    if (pdfText.length > maxChars) {
+      this.logger.warn(`PDF text truncated from ${pdfText.length} to ${maxChars} chars`);
+      pdfText = pdfText.substring(0, maxChars);
+    }
+
+    const basePrompt = `Você é um extrator de questões de provas. Extraia ABSOLUTAMENTE TODAS as questões de múltipla escolha do texto abaixo.
+NÃO GERE JSON. Use EXCLUSIVAMENTE o formato delimitado por "@@@".
+${QUESTION_FORMAT}
+
+Extraia TODAS as questões encontradas neste texto de prova:
+--- INÍCIO DO TEXTO ---
+${pdfText}
+--- FIM DO TEXTO ---`;
 
     const prompt = customPrompt
       ? `${basePrompt}\n\nINSTRUÇÕES ADICIONAIS DO PROFESSOR:\n${customPrompt}`
       : basePrompt;
 
-    const pdfPart = {
-      inline_data: { mime_type: 'application/pdf', data: pdfBuffer.toString('base64') },
-    };
-
-    this.logger.log(`PDF size: ${(pdfBuffer.length / 1024).toFixed(1)} KB`);
-
-    const errors: string[] = [];
-
-    for (const model of GEMINI_MODELS) {
-      try {
-        this.logger.log(`Trying model: ${model}`);
-        const raw = await this.callGeminiRest(apiKey, model, [pdfPart, { text: prompt }]);
-        this.logger.log(`Success with ${model} (${raw.length} chars)`);
-        return this.parseQuestionsFromText(raw);
-      } catch (err: any) {
-        const msg = err?.message || String(err);
-        errors.push(`[${model}]: ${msg.substring(0, 200)}`);
-        this.logger.warn(`${model} failed: ${msg.substring(0, 150)}`);
-
-        // Stop only on auth errors (400/401) — continue on 429 quota or 404 model-not-found
-        const isAuthError = msg.includes('HTTP 401') || msg.includes('API_KEY_INVALID') || msg.includes('API key not valid');
-        if (isAuthError) break;
-      }
-    }
-
-    this.logger.error(`All models failed:\n${errors.join('\n')}`);
-
-    // Check if failure was due to quota
-    const allQuota = errors.every(e => e.includes('429'));
-    if (allQuota) {
-      throw new BadRequestException(
-        'Cota da API Gemini esgotada (erro 429). Gere uma nova chave gratuita em https://aistudio.google.com/app/apikey e configure em GEMINI_API_KEY no Render.',
-      );
-    }
-
-    throw new BadRequestException(
-      `Não foi possível processar o PDF. Detalhes:\n${errors[0] || 'Erro desconhecido'}`,
-    );
+    const raw = await this.tryModels(apiKey, prompt);
+    return this.parseQuestionsFromText(raw);
   }
 
   // ─── Topic → Questions ────────────────────────────────────────────────────────
   async generateQuestionsByTopic(topic: string, count: number = 5, userApiKey?: string): Promise<any[]> {
-    const apiKey = (userApiKey?.trim()) || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new BadRequestException('Nenhuma chave de API do Gemini configurada ou fornecida.');
+    const apiKey = userApiKey?.trim() || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new BadRequestException('Nenhuma chave da API Gemini configurada.');
 
     const prompt = `Você é um professor especializado em criar atividades acadêmicas.
-Sua tarefa é criar exatos ${count} tópicos de desenvolvimento (questões discursivas abertas) sobre o seguinte tópico: "${topic}".
-Para CADA exercício, você DEVE propor um ponto para o aluno pesquisar, escrever ou desenvolver, não utilize múltipla escolha.
-GERE O TEXTO PURAMENTE ESTRUTURADO COM O DELIMITADOR "@@@".
+Crie exatos ${count} questões discursivas abertas sobre: "${topic}".
+NÃO use múltipla escolha. Cada questão deve propor um ponto para o aluno pesquisar ou desenvolver.
 
-Formatação EXIGIDA para CADA questão:
+Formatação OBRIGATÓRIA:
 @@@
 [ENUNCIADO]
 Texto claro da pergunta discursiva.
@@ -146,68 +169,50 @@ Texto claro da pergunta discursiva.
 TEXT
 @@@
 
-Regras estritas:
-- Comece CADA questão com "@@@".
-- Retorne EXATAMENTE ${count} questões relevantes ao tópico.`;
+Retorne EXATAMENTE ${count} questões.`;
 
-    this.logger.log(`Generating ${count} questions for topic: ${topic}`);
+    const raw = await this.tryModels(apiKey, prompt);
 
-    let raw = '';
-    for (const model of GEMINI_MODELS) {
-      try {
-        raw = await this.callGeminiRest(apiKey, model, [{ text: prompt }], { temperature: 0.7 });
-        this.logger.log(`Success with ${model}`);
-        break;
-      } catch (err: any) {
-        this.logger.warn(`${model} failed: ${err?.message?.substring(0, 100)}`);
-      }
-    }
-
-    if (!raw) throw new BadRequestException('Falha ao comunicar com a inteligência artificial.');
-
-    const blocks = raw.split('@@@').map((b: string) => b.trim()).filter((b: string) => b.length > 20);
+    const blocks = raw.split('@@@').map(b => b.trim()).filter(b => b.length > 20);
     const generated: any[] = [];
 
     for (const block of blocks) {
-      const enunciadoMatch = block.match(/\[ENUNCIADO\]([\s\S]*?)\[TIPO\]/i);
-      if (!enunciadoMatch) continue;
-      const statement = enunciadoMatch[1].trim();
-      if (statement) {
-        generated.push({ statement, type: 'TEXT', options: ['', ''] });
+      const match = block.match(/\[ENUNCIADO\]([\s\S]*?)(?:\[TIPO\]|$)/i);
+      if (match && match[1].trim()) {
+        generated.push({ statement: match[1].trim(), type: 'TEXT', options: ['', ''] });
       }
     }
 
-    if (generated.length === 0) throw new BadRequestException('A IA não retornou respostas em um formato válido.');
+    if (generated.length === 0) throw new BadRequestException('A IA não retornou respostas em formato válido.');
     return generated;
   }
 
-  // ─── Parser ───────────────────────────────────────────────────────────────────
+  // ─── Text parser ─────────────────────────────────────────────────────────────
   private parseQuestionsFromText(raw: string): any[] {
-    const blocks = raw.split('@@@').map((b: string) => b.trim()).filter((b: string) => b.length > 20);
+    const blocks = raw.split('@@@').map(b => b.trim()).filter(b => b.length > 20);
     const parsedQuestions: any[] = [];
 
     for (const block of blocks) {
       try {
         const enunciadoMatch = block.match(/\[ENUNCIADO\]([\s\S]*?)\[PONTOS\]/i);
-        const pontosMatch = block.match(/\[PONTOS\]([\s\S]*?)\[MODO\]/i);
-        const modoMatch = block.match(/\[MODO\]([\s\S]*?)\[OPCOES\]/i);
-        const opcoesMatch = block.match(/\[OPCOES\]([\s\S]*)$/i);
+        const pontosMatch    = block.match(/\[PONTOS\]([\s\S]*?)\[MODO\]/i);
+        const modoMatch      = block.match(/\[MODO\]([\s\S]*?)\[OPCOES\]/i);
+        const opcoesMatch    = block.match(/\[OPCOES\]([\s\S]*)$/i);
 
         if (!enunciadoMatch || !opcoesMatch) continue;
 
-        const statement = enunciadoMatch[1].trim();
-        const ptStr = pontosMatch ? pontosMatch[1].trim() : '1';
-        const modoStr = modoMatch ? modoMatch[1].trim() : 'ANY_CORRECT';
-        const pointValue = parseFloat(ptStr) || 1;
-        const scoringMode = modoStr.includes('ALL') ? 'ALL_REQUIRED' : 'ANY_CORRECT';
+        const statement   = enunciadoMatch[1].trim();
+        const pointValue  = parseFloat(pontosMatch?.[1]?.trim() || '1') || 1;
+        const scoringMode = (modoMatch?.[1]?.trim() || '').includes('ALL') ? 'ALL_REQUIRED' : 'ANY_CORRECT';
 
-        const lines = opcoesMatch[1].trim().split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+        const lines = opcoesMatch[1].trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const options: any[] = [];
 
         for (const line of lines) {
-          if (line.toUpperCase().startsWith('(V)')) {
+          const upper = line.toUpperCase();
+          if (upper.startsWith('(V)')) {
             options.push({ text: line.substring(3).trim(), isCorrect: true });
-          } else if (line.toUpperCase().startsWith('(F)')) {
+          } else if (upper.startsWith('(F)')) {
             options.push({ text: line.substring(3).trim(), isCorrect: false });
           } else if (line.length > 2 && options.length > 0) {
             options[options.length - 1].text += ' ' + line;
@@ -218,12 +223,14 @@ Regras estritas:
           parsedQuestions.push({ statement, pointValue, scoringMode, options });
         }
       } catch (err) {
-        this.logger.warn(`Failed to parse block: ${err}`);
+        this.logger.warn(`Block parse error: ${err}`);
       }
     }
 
     if (parsedQuestions.length === 0) {
-      throw new Error('Não foi possível extrair nenhuma questão. Verifique se o PDF contém questões de múltipla escolha.');
+      throw new BadRequestException(
+        'Nenhuma questão foi extraída. Verifique se o PDF contém questões de múltipla escolha com formato legível (não imagem escaneada).',
+      );
     }
 
     return parsedQuestions;
