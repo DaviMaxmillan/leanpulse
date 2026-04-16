@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import * as XLSX from 'xlsx';
@@ -6,6 +6,8 @@ import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -101,9 +103,11 @@ export class SessionsService {
       },
     });
 
-    if (!session) throw new BadRequestException('Session not found');
+    if (!session) throw new BadRequestException('Sessão não encontrada.');
     if (session.status === 'finished')
-      throw new BadRequestException('Session already finished');
+      throw new BadRequestException('Esta prova já foi entregue.');
+    if (!session.room?.exam)
+      throw new BadRequestException('Dados da prova não encontrados. Recarregue a página.');
 
     const exam = session.room.exam;
     let rawScore = 0;
@@ -156,7 +160,12 @@ export class SessionsService {
       });
     }
 
-    await this.prisma.answer.createMany({ data: answerRecords });
+    try {
+      await this.prisma.answer.createMany({ data: answerRecords });
+    } catch (e: any) {
+      this.logger.error('Erro ao salvar respostas:', e?.message || e);
+      throw new BadRequestException('Erro ao salvar respostas: ' + (e?.message || 'falha no banco de dados'));
+    }
 
     const finalGrade = rawScore * (exam.weight / 10);
 

@@ -228,13 +228,17 @@ function ExamContent() {
         body: JSON.stringify({ answers: answersBody }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.message || `Erro ${res.status} ao enviar a prova.`;
+        throw new Error(msg);
+      }
       const data = await res.json();
       setScoreResult({ rawScore: data.rawScore, finalGrade: data.finalGrade, weight: data.weight });
       setStatus('finished');
       localStorage.removeItem(`exam_progress_${sessionId}`);
-    } catch {
-      alert('Falha ao enviar. Tente novamente.');
+    } catch (err: any) {
+      alert('Falha ao enviar. ' + (err.message || 'Tente novamente.'));
       isExamEndingRef.current = false;
       document.documentElement.requestFullscreen().catch(() => {});
     } finally {
