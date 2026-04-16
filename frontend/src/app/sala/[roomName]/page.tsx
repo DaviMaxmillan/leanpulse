@@ -58,7 +58,7 @@ export default function SalaEntradaPage() {
       }
       const session = await res.json();
       localStorage.setItem('exam_session', JSON.stringify(session));
-      router.push(`/exam/${session.id}`);
+      router.push(`/exam/${roomName}?sessionId=${session.id}&roomId=${session.roomId}`);
     } finally {
       setSubmitting(false);
     }
