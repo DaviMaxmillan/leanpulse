@@ -3,9 +3,11 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 const GEMINI_MODELS = [
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',   // free tier, ultra-low cost
   'gemini-1.5-pro',
   'gemini-2.0-flash-lite',
 ];
+
 
 @Injectable()
 export class AiService {
@@ -105,14 +107,22 @@ Regras:
         errors.push(`[${model}]: ${msg.substring(0, 200)}`);
         this.logger.warn(`${model} failed: ${msg.substring(0, 150)}`);
 
-        // Stop only on auth errors
-        if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid') || msg.includes('HTTP 400') || msg.includes('HTTP 401')) {
-          break;
-        }
+        // Stop only on auth errors (400/401) — continue on 429 quota or 404 model-not-found
+        const isAuthError = msg.includes('HTTP 401') || msg.includes('API_KEY_INVALID') || msg.includes('API key not valid');
+        if (isAuthError) break;
       }
     }
 
     this.logger.error(`All models failed:\n${errors.join('\n')}`);
+
+    // Check if failure was due to quota
+    const allQuota = errors.every(e => e.includes('429'));
+    if (allQuota) {
+      throw new BadRequestException(
+        'Cota da API Gemini esgotada (erro 429). Gere uma nova chave gratuita em https://aistudio.google.com/app/apikey e configure em GEMINI_API_KEY no Render.',
+      );
+    }
+
     throw new BadRequestException(
       `Não foi possível processar o PDF. Detalhes:\n${errors[0] || 'Erro desconhecido'}`,
     );
