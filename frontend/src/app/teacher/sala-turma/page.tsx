@@ -3,6 +3,7 @@ import { getApiUrl as API } from '../../../lib/api';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import QRCode from 'react-qr-code';
 
 interface ClassItem { id: string; name: string; subject?: string; _count: { students: number } }
 interface ExamItem { id: string; title: string; weight: number }
@@ -24,6 +25,7 @@ export default function SalaTurmaPage() {
   const [form, setForm] = useState({ classId: '', examId: '', name: '' });
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [qrRoom, setQrRoom] = useState<Room | null>(null);
 
   
 
@@ -163,6 +165,14 @@ export default function SalaTurmaPage() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* QR Code button */}
+                  <button
+                    onClick={() => setQrRoom(room)}
+                    className="p-2 rounded-lg border border-[var(--outline)] text-[var(--on-surface-variant)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-colors"
+                    title="Ver QR Code da sala"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="3" y="3" width="1" height="1" fill="currentColor"/><rect x="14" y="3" width="1" height="1" fill="currentColor"/><rect x="3" y="14" width="1" height="1" fill="currentColor"/><path d="M14 14h7v7M14 17h4M17 14v4"/></svg>
+                  </button>
                   {/* Link to copy */}
                   <button
                     onClick={() => {
@@ -190,6 +200,64 @@ export default function SalaTurmaPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: QR Code da Sala */}
+      {qrRoom && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setQrRoom(null)}>
+          <div className="bg-[var(--surface-card)] rounded-2xl shadow-2xl w-full max-w-sm border border-[var(--outline)] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="h-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--accent)]" />
+            <div className="p-6 text-center">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-extrabold text-[var(--on-surface)] text-left">{qrRoom.name}</h2>
+                  <p className="text-sm text-[var(--primary)] font-semibold text-left">{qrRoom.exam.title}</p>
+                  {qrRoom.class && <p className="text-xs text-[var(--on-surface-variant)] font-medium text-left">Turma: {qrRoom.class.name}</p>}
+                </div>
+                <button onClick={() => setQrRoom(null)} className="text-[var(--on-surface-variant)] hover:text-[var(--on-surface)] p-1">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+
+              {/* QR Code */}
+              <div className="bg-white p-4 rounded-xl inline-block mb-4 shadow-inner">
+                <QRCode
+                  value={`${typeof window !== 'undefined' ? window.location.origin : 'https://www.leanpulse.com.br'}/sala/${qrRoom.name}`}
+                  size={200}
+                  level="H"
+                />
+              </div>
+
+              <p className="text-xs text-[var(--on-surface-muted)] font-medium mb-1">Escaneie o código ou copie o link abaixo</p>
+              <div className="flex items-center gap-2 bg-[var(--surface-low)] border border-[var(--outline)] rounded-xl px-3 py-2 mb-4">
+                <span className="text-xs font-mono text-[var(--on-surface-variant)] flex-1 truncate">
+                  {typeof window !== 'undefined' ? window.location.origin : 'https://www.leanpulse.com.br'}/sala/{qrRoom.name}
+                </span>
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/sala/${qrRoom.name}`;
+                    navigator.clipboard.writeText(url).then(() => alert('Link copiado!'));
+                  }}
+                  className="text-[var(--primary)] hover:text-[var(--primary-hover)] font-bold text-xs whitespace-nowrap"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setQrRoom(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-[var(--outline)] text-[var(--on-surface-variant)] font-bold text-sm hover:bg-[var(--surface-low)] transition-colors">
+                  Fechar
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] text-white font-bold text-sm hover:shadow-lg transition-all">
+                  🖨️ Imprimir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Criar Sala para Turma */}
       {showForm && (
