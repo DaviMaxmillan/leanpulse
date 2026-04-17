@@ -144,6 +144,12 @@ export class AiService {
     const apiKey = userApiKey?.trim() || process.env.GEMINI_API_KEY;
     if (!apiKey) throw new BadRequestException('Nenhuma chave da API Gemini configurada. Configure em Configurações de IA.');
 
+    // Diagnostic log — shows which key is being used (never logs the full key)
+    const keyHint = apiKey.length > 8 ? `${apiKey.substring(0, 8)}...${apiKey.slice(-4)}` : '(curta)';
+    const keySource = userApiKey?.trim() ? 'DB (professor)' : 'ENV (GEMINI_API_KEY)';
+    this.logger.log(`Using API key from ${keySource}: ${keyHint}`);
+
+
     const basePrompt = `Você é um robô extrator de dados de provas. Sua ÚNICA tarefa é extrair ABSOLUTAMENTE TODAS as questões de múltipla escolha do documento.
 NÃO GERE JSON! GERE TEXTO PURAMENTE ESTRUTURADO COM O DELIMITADOR "@@@".
 
