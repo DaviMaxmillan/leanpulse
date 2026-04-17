@@ -11,12 +11,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("TEACHER")
-  createdAt DateTime @default(now())
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          String   @default("TEACHER")
+  geminiApiKey  String?
+  createdAt     DateTime @default(now())
 
   exams        Exam[]
   rooms        Room[]

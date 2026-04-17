@@ -58,11 +58,15 @@ export default function TeacherDashboard() {
 
   const [isSendingEmail, setIsSendingEmail] = useState<string | null>(null);
 
-  // AI PDF Import
+  // AI Settings
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ count: number } | null>(null);
-  const [customGeminiKey, setCustomGeminiKey] = useState('');
   const [customAiPrompt, setCustomAiPrompt] = useState('');
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [aiKeyInput, setAiKeyInput] = useState('');
+  const [aiKeyHint, setAiKeyHint] = useState<string | null>(null);
+  const [aiKeySet, setAiKeySet] = useState(false);
+  const [isSavingAiKey, setIsSavingAiKey] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,8 +75,14 @@ export default function TeacherDashboard() {
     setToken(t);
     fetchExams(t);
     fetchRooms(t);
-    const savedGeminiKey = localStorage.getItem('custom_gemini_key');
-    if (savedGeminiKey) setCustomGeminiKey(savedGeminiKey);
+    // Load teacher profile (API key status)
+    fetch(`${getApiUrl()}/auth/me`, { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(data => {
+        setAiKeySet(!!data.geminiApiKeySet);
+        setAiKeyHint(data.geminiApiKeyHint || null);
+      })
+      .catch(() => {});
   }, [router]);
 
   const fetchExams = async (t = token) => {
@@ -327,6 +337,23 @@ export default function TeacherDashboard() {
     finally { setIsSendingEmail(null); }
   };
 
+  const handleSaveAiKey = async () => {
+    setIsSavingAiKey(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/auth/me/gemini-key`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ geminiApiKey: aiKeyInput.trim() }),
+      });
+      const data = await res.json();
+      setAiKeySet(!!data.geminiApiKeySet);
+      setAiKeyHint(data.geminiApiKeyHint || null);
+      setAiKeyInput('');
+      alert(aiKeyInput.trim() ? '✅ Chave salva com sucesso!' : '🗑️ Chave removida.');
+    } catch { alert('Erro ao salvar chave.'); }
+    finally { setIsSavingAiKey(false); }
+  };
+
   const handleImportPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -338,13 +365,8 @@ export default function TeacherDashboard() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      if (customGeminiKey) {
-        formData.append('apiKey', customGeminiKey);
-        localStorage.setItem('custom_gemini_key', customGeminiKey);
-      }
-      if (customAiPrompt) {
-        formData.append('customPrompt', customAiPrompt);
-      }
+      if (customAiPrompt) formData.append('customPrompt', customAiPrompt);
+      // API key is now fetched server-side from the teacher's profile
 
       const res = await fetch(`${getApiUrl()}/ai/parse-pdf`, {
         method: 'POST',
@@ -443,9 +465,12 @@ export default function TeacherDashboard() {
                 <h3>{editingExamId ? `Editando: ${examTitle}` : 'Criar Nova Prova'}</h3>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <textarea placeholder="Instruções para a IA (Opcional)..." value={customAiPrompt} onChange={(e) => setCustomAiPrompt(e.target.value)} className="lp-input" style={{ width: '240px', minHeight: '52px', fontSize: '0.8125rem', resize: 'vertical' }} />
-                  <input type="password" placeholder="Chave API Gemini (Opcional)" value={customGeminiKey} onChange={(e) => setCustomGeminiKey(e.target.value)} className="lp-input" style={{ width: '180px', fontSize: '0.8125rem' }} />
+                  {/* AI Settings Button */}
+                  <button type="button" onClick={() => setShowAiSettings(true)} className="btn btn-outline btn-sm" title={aiKeySet ? `Chave configurada: ${aiKeyHint}` : 'Configurar chave Gemini'} style={{ position: 'relative' }}>
+                    🔑 {aiKeySet ? <span style={{ color: 'var(--success)' }}>IA Ativa</span> : <span style={{ color: 'var(--danger)' }}>Configurar IA</span>}
+                  </button>
                   <input ref={pdfInputRef} type="file" accept="application/pdf" style={{ display: 'none' }} onChange={handleImportPdf} />
-                  <button type="button" disabled={isImporting} onClick={() => pdfInputRef.current?.click()} className="btn btn-outline btn-sm">
+                  <button type="button" disabled={isImporting || !aiKeySet} onClick={() => pdfInputRef.current?.click()} className="btn btn-outline btn-sm" title={!aiKeySet ? 'Configure sua chave Gemini primeiro' : ''}>
                     {isImporting ? <><span className="spinner" style={{ borderTopColor: 'var(--primary)', borderColor: 'rgba(30,64,175,0.3)' }} /> Extraindo...</> : '🤖 Importar PDF'}
                   </button>
                   {importResult && <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 700 }}>✓ {importResult.count} questões extraídas!</span>}
@@ -716,6 +741,74 @@ export default function TeacherDashboard() {
         )}
 
       </main>
+
+      {/* ── Modal: Configurações de IA ─────────────────────────────────────── */}
+      {showAiSettings && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setShowAiSettings(false)}>
+          <div style={{ background: 'var(--surface)', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700 }}>🔑 Configurações de IA</h2>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>Sua chave pessoal da API Google Gemini</p>
+              </div>
+              <button onClick={() => setShowAiSettings(false)} style={{ background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>✕</button>
+            </div>
+
+            {/* Status */}
+            <div style={{ padding: '0.875rem 1rem', borderRadius: '8px', background: aiKeySet ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${aiKeySet ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>{aiKeySet ? '✅' : '⚠️'}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.875rem', color: aiKeySet ? 'var(--success)' : 'var(--danger)' }}>
+                  {aiKeySet ? 'Chave configurada' : 'Chave não configurada'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
+                  {aiKeySet ? `Chave ativa: ${aiKeyHint}` : 'Configure sua chave para usar a IA'}
+                </div>
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="lp-field" style={{ marginBottom: '1rem' }}>
+              <label className="lp-label">Nova Chave da API Gemini</label>
+              <input
+                type="password"
+                className="lp-input"
+                placeholder="AIzaSy..."
+                value={aiKeyInput}
+                onChange={e => setAiKeyInput(e.target.value)}
+                autoComplete="off"
+              />
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
+                Obtenha sua chave gratuita em{' '}
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+                  aistudio.google.com
+                </a>
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              {aiKeySet && (
+                <button
+                  type="button"
+                  disabled={isSavingAiKey}
+                  onClick={() => { setAiKeyInput(''); handleSaveAiKey(); }}
+                  style={{ background: 'none', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '0.625rem 1rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}
+                >
+                  🗑️ Remover chave
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={isSavingAiKey || !aiKeyInput.trim()}
+                onClick={handleSaveAiKey}
+                className="btn btn-primary"
+              >
+                {isSavingAiKey ? 'Salvando...' : '💾 Salvar Chave'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
