@@ -56,7 +56,8 @@ export class AiService {
         'X-Goog-Upload-Offset': '0',
         'X-Goog-Upload-Command': 'upload, finalize',
       },
-      body: pdfBuffer,
+      body: new Uint8Array(pdfBuffer),
+
     });
 
     if (!uploadRes.ok) {
