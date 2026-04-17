@@ -1,19 +1,46 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
-// Models to try in order
-const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
+// Fallback list if ListModels fails
+const GEMINI_MODELS_FALLBACK = [
+  'gemini-2.5-flash-preview-04-17',
+  'gemini-2.5-pro-preview-03-25',
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
   'gemini-1.5-flash-8b',
 ];
 
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+
+  // ─── Discover models available for this API key ─────────────────────────────
+  private async listAvailableModels(apiKey: string): Promise<string[]> {
+    try {
+      const res = await fetch(`${GEMINI_BASE}/models?key=${apiKey}`);
+      if (!res.ok) {
+        this.logger.warn(`ListModels failed HTTP ${res.status}, using fallback list`);
+        return GEMINI_MODELS_FALLBACK;
+      }
+      const data = await res.json();
+      const models: string[] = (data.models ?? [])
+        .filter((m: any) =>
+          Array.isArray(m.supportedGenerationMethods) &&
+          m.supportedGenerationMethods.includes('generateContent'),
+        )
+        .map((m: any) => (m.name as string).replace('models/', ''));
+
+      if (models.length === 0) return GEMINI_MODELS_FALLBACK;
+      this.logger.log(`Available models for this key (${models.length}): ${models.slice(0, 5).join(', ')}...`);
+      return models;
+    } catch (err: any) {
+      this.logger.warn(`ListModels error: ${err?.message}`);
+      return GEMINI_MODELS_FALLBACK;
+    }
+  }
 
   // ─── Core REST call with camelCase fields (required by Gemini REST API) ──────
   private async callGemini(
@@ -22,7 +49,7 @@ export class AiService {
     parts: any[],
     temperature = 0.1,
   ): Promise<string> {
-    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+    const url = `${GEMINI_BASE}/models/${model}:generateContent?key=${apiKey}`;
 
     const res = await fetch(url, {
       method: 'POST',
@@ -48,15 +75,17 @@ export class AiService {
     return text;
   }
 
-  // ─── Try all models in order ─────────────────────────────────────────────────
+  // ─── Try available models in order ─────────────────────────────────────────
   private async tryModels(
     apiKey: string,
     parts: any[],
     temperature = 0.1,
   ): Promise<string> {
+    const models = await this.listAvailableModels(apiKey);
+    this.logger.log(`Will try ${models.length} models: ${models.slice(0,4).join(', ')}...`);
     const errors: string[] = [];
 
-    for (const model of GEMINI_MODELS) {
+    for (const model of models) {
       try {
         this.logger.log(`Trying ${model}...`);
         const text = await this.callGemini(apiKey, model, parts, temperature);
